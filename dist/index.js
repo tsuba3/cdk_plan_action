@@ -40,23 +40,78 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(186));
+const shell_1 = __nccwpck_require__(770);
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
-        try {
-            const ms = core.getInput('milliseconds');
-            core.debug(`Waiting ${ms} milliseconds ...`); // debug is only output if you set the secret `ACTIONS_STEP_DEBUG` to true
-            core.debug(new Date().toTimeString());
-            core.debug(new Date().toTimeString());
-            core.setOutput('time', new Date().toTimeString());
-        }
-        catch (error) {
-            if (error instanceof Error)
-                core.setFailed(error.message);
-        }
+        core.info('ls');
+        (0, shell_1.sh)('ls');
+        (0, shell_1.sh)('npx cdk synth');
     });
 }
 // noinspection JSIgnoredPromiseFromCall
-run();
+(() => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        yield run();
+    }
+    catch (e) {
+        if (e instanceof Error)
+            core.setFailed(e.message);
+    }
+}))();
+
+
+/***/ }),
+
+/***/ 770:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.sh = void 0;
+const child_process_1 = __nccwpck_require__(81);
+const core = __importStar(__nccwpck_require__(186));
+const sh = (cmd) => {
+    var _a;
+    core.startGroup(`$ ${cmd}`);
+    const process = (0, child_process_1.spawnSync)(cmd, {
+        maxBuffer: 1000 * 1000 * 1000,
+        shell: true
+    });
+    core.info(process.stdout.toString());
+    if (process.stderr.length)
+        core.warning(process.stderr.toString());
+    core.endGroup();
+    return {
+        code: (_a = process.status) !== null && _a !== void 0 ? _a : 0,
+        stderr: process.stderr.toString(),
+        stdout: process.stdout.toString()
+    };
+};
+exports.sh = sh;
 
 
 /***/ }),
@@ -2738,6 +2793,14 @@ exports["default"] = _default;
 
 "use strict";
 module.exports = require("assert");
+
+/***/ }),
+
+/***/ 81:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("child_process");
 
 /***/ }),
 
