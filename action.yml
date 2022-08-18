@@ -2,26 +2,26 @@ name: CDK Plan Action
 description: Comment cdk diff to pr
 author: tsuba3
 inputs:
-  cdk_command: # change this
+  cdk-command: # change this
     required: false
     description: 'input description here'
     default: 'npx cdk synth'
 
-  enable_drift_detection:
+  enable-drift_detection:
     required: false
     description: 'Whether run drift detection'
     default: 'true'
 
-  pr_number:
+  pr-number:
     required: false
     description: PR number to comment
     default: ${{ github.event.pull_request.number }}
 
-  aws_region:
+  aws-region:
     required: true
     description: 'AWS region'
 
-  replace_comments:
+  replace-comments:
     required: false
     default: 'true'
     description: 'Remove previous comments'
