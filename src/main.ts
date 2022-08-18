@@ -12,6 +12,7 @@ import {
   GetTemplateCommand,
   ListStackResourcesCommand,
   ListStacksCommand,
+  ListStacksCommandOutput,
   StackDriftDetectionStatus,
   StackDriftStatus,
   StackResourceDriftStatus,
@@ -149,7 +150,7 @@ interface MakeDiffMessageOption {
   stackDriftDetected: boolean;
   templateDiff: {[k: string]: TemplateDiff};
   cfnStackResourcesSummaries: {[stackName: string]: {[id: string]: StackResourceSummary}};
-  cfnStacks: any;
+  cfnStacks: ListStacksCommandOutput;
   awsRegion: string;
 }
 
@@ -216,7 +217,7 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
       not_changed: '🈚'
     }[status];
     if (status !== 'new') {
-      const stackId = cfnStacks.StackSummaries.find((s: any) => s.StackName === stackName).StackId;
+      const stackId = cfnStacks.StackSummaries!.find((s: any) => s.StackName === stackName)!.StackId!;
       const stackUrl = `https://${awsRegion}.console.aws.amazon.com/cloudformation/home?region=${awsRegion}#/stacks/stackinfo?stackId=${encodeURI(
         stackId
       )}`;
@@ -290,7 +291,12 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
       if (driftStatus === 'NOT_CHECKED') {
         driftMsg = '⚠ NOT_CHECKED';
       } else if (driftStatus === 'MODIFIED') {
-        driftMsg = '🚨 MODIFIED';
+        const stackId = cfnStacks.StackSummaries!.find((s: any) => s.StackName === stackName)!.StackId!;
+        //https://ap-northeast-1.console.aws.amazon.com/cloudformation/home?region=ap-northeast-1#/stacks/drifts/info?stackId=arn%3Aaws%3Acloudformation%3Aap-northeast-1%3A693586505932%3Astack%2FRdsStack%2F1bec6510-13bc-11ed-b224-0e324b310e67&logicalResourceId=rdscluster9D572005
+        const url = `https://${awsRegion}.console.aws.amazon.com/cloudformation/home?region=${awsRegion}#/stacks/drifts/info?stackId=${encodeURI(
+          stackId
+        )}&logicalResourceId=${encodeURI(logicalId)}`;
+        driftMsg = `[🚨 MODIFIED](${url})`;
       } else if (driftStatus === 'IN_SYNC') {
         driftMsg = '✅ IN_SYNC';
       } else {
