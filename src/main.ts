@@ -65,11 +65,13 @@ async function run(): Promise<void> {
     templateDiff[stackName] = diffTemplate(cfnTemplates[stackName] ?? {}, stackTemplates[stackName]);
     if (templateDiff[stackName].differenceCount) editedStackCount += 1;
   }
+  core.setOutput('edited-stack-count', editedStackCount);
 
   // Detect Stack Drift
   let stackDriftDetected = false;
   if (enableDriftDetection) {
     stackDriftDetected = await detectStackDrift(cfnStackNames);
+    core.setOutput('stack-drift-detected', stackDriftDetected);
   }
 
   // Retrieve stack resources summaries from CloudFormation (including result of stack drift)

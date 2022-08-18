@@ -31,6 +31,13 @@ inputs:
     default: 'true'
     description: 'Remove previous comments'
 
+outputs:
+  edited-stack-count:
+    description: 'The number of stacks which will be updated or created.'
+
+  stack-drift-detected:
+    description: 'true if stack drift detection is enabled and some stacks drifts, false otherwise.'
+
 runs:
   using: 'node16'
   main: 'dist/index.js'
