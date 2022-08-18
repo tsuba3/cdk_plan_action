@@ -6,11 +6,11 @@ import {PassThrough} from 'stream';
 import {randomUUID} from 'crypto';
 
 async function run(): Promise<void> {
-  const prNumber = core.getInput('pr_number');
-  const cdkCommand = core.getInput('cdk_command');
-  const enableDriftDetection = core.getBooleanInput('enable_drift_detection');
-  const awsRegion = core.getInput('aws_region');
-  const replaceComments = core.getBooleanInput('replace_comments');
+  const prNumber = core.getInput('pr-number');
+  const cdkCommand = core.getInput('cdk-command');
+  const enableDriftDetection = core.getBooleanInput('enable-drift-detection');
+  const awsRegion = core.getInput('aws-region');
+  const replaceComments = core.getBooleanInput('replace-comments');
 
   // Synth templates
   sh(cdkCommand);

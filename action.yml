@@ -7,7 +7,7 @@ inputs:
     description: 'input description here'
     default: 'npx cdk synth'
 
-  enable-drift_detection:
+  enable-drift-detection:
     required: false
     description: 'Whether run drift detection'
     default: 'true'
