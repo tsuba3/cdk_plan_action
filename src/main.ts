@@ -4,14 +4,27 @@ import * as fs from 'fs';
 import {diffTemplate, formatDifferences, ResourceImpact} from '@aws-cdk/cloudformation-diff';
 import {PassThrough} from 'stream';
 import {randomUUID} from 'crypto';
+import {
+  CloudFormationClient,
+  DescribeStackDriftDetectionStatusCommand,
+  ListStackResourcesCommand,
+  DetectStackDriftCommand,
+  GetTemplateCommand,
+  ListStacksCommand,
+  StackDriftDetectionStatus,
+  StackDriftStatus,
+  StackStatus,
+  DescribeStackDriftDetectionStatusCommandOutput
+} from '@aws-sdk/client-cloudformation';
+
+const prNumber = core.getInput('pr-number');
+const cdkCommand = core.getInput('cdk-command');
+const enableDriftDetection = core.getBooleanInput('enable-drift-detection');
+const awsRegion = core.getInput('aws-region');
+const replaceComments = core.getBooleanInput('replace-comments');
+const cfnClient = new CloudFormationClient({region: awsRegion});
 
 async function run(): Promise<void> {
-  const prNumber = core.getInput('pr-number');
-  const cdkCommand = core.getInput('cdk-command');
-  const enableDriftDetection = core.getBooleanInput('enable-drift-detection');
-  const awsRegion = core.getInput('aws-region');
-  const replaceComments = core.getBooleanInput('replace-comments');
-
   // Synth templates
   sh(cdkCommand);
 
@@ -27,16 +40,17 @@ async function run(): Promise<void> {
   }
 
   // Retrieve current templates from CloudFormation
-  const cfnStacks: any = JSON.parse(sh(`aws cloudformation list-stacks`).stdout);
-  const cfnStackNames = cfnStacks['StackSummaries']
-    .filter((s: any) => s.StackStatus !== 'DELETE_COMPLETE')
-    .filter((s: any) => s.StackStatus !== 'REVIEW_IN_PROGRESS')
-    .map((x: any) => x['StackName'])
-    .filter((x: any) => stackNames.includes(x));
+  const cfnStacks = await cfnClient.send(new ListStacksCommand({}));
+  const cfnStackNames = cfnStacks
+    .StackSummaries!.filter((s: any) => s.StackStatus !== StackStatus.DELETE_COMPLETE)
+    .filter(s => s.StackStatus !== StackStatus.REVIEW_IN_PROGRESS)
+    .map(x => x.StackName)
+    .filter(x => x && stackNames.includes(x))
+    .map(x => x as string);
   const cfnTemplates: {[k: string]: any} = {};
   for (const stackName of cfnStackNames) {
-    const command = sh(`aws cloudformation get-template --stack-name ${stackName}`);
-    cfnTemplates[stackName] = JSON.parse(command.stdout).TemplateBody;
+    const res = await cfnClient.send(new GetTemplateCommand({StackName: stackName}));
+    cfnTemplates[stackName] = JSON.parse(res.TemplateBody ?? '{}');
   }
 
   // Diff templates
@@ -69,7 +83,7 @@ async function run(): Promise<void> {
   });
 
   if (replaceComments) await removeOldComment();
-  await postComment(prNumber, message);
+  await postComment(message);
 }
 
 const detectStackDrift = async (stackNames: string[]): Promise<boolean> => {
@@ -79,21 +93,21 @@ const detectStackDrift = async (stackNames: string[]): Promise<boolean> => {
   const driftDetectionRequests = [];
   for (const stackName of stackNames) {
     // Start Stack Drift Detection
-    const command = sh(`aws cloudformation detect-stack-drift --stack-name "${stackName}"`);
-    const res = JSON.parse(command.stdout);
-    const driftDetectionId = res['StackDriftDetectionId'];
+    const res = await cfnClient.send(new DetectStackDriftCommand({StackName: stackName}));
+    const driftDetectionId = res.StackDriftDetectionId;
     driftDetectionRequests.push({stackName, driftDetectionId});
   }
   for (const {driftDetectionId} of driftDetectionRequests) {
     // Wait drift detection end
-    let detectRes;
+    let detectRes: DescribeStackDriftDetectionStatusCommandOutput;
     // eslint-disable-next-line no-constant-condition
     while (true) {
-      const describeCommand = sh(
-        `aws cloudformation describe-stack-drift-detection-status --stack-drift-detection-id "${driftDetectionId}"`
+      detectRes = await cfnClient.send(
+        new DescribeStackDriftDetectionStatusCommand({
+          StackDriftDetectionId: driftDetectionId
+        })
       );
-      detectRes = JSON.parse(describeCommand.stdout);
-      if (detectRes['DetectionStatus'] !== 'DETECTION_IN_PROGRESS') {
+      if (detectRes.DetectionStatus !== StackDriftDetectionStatus.DETECTION_IN_PROGRESS) {
         break;
       }
       if (new Date().getTime() - driftDetectionStartTime > STACK_DETECTION_TIMEOUT) {
@@ -102,7 +116,7 @@ const detectStackDrift = async (stackNames: string[]): Promise<boolean> => {
       await sleep(5000);
     }
 
-    if (detectRes['StackDriftStatus'] === 'DRIFTED') {
+    if (detectRes.StackDriftStatus === StackDriftStatus.DRIFTED) {
       stackDriftDetected = true;
     }
   }
@@ -112,10 +126,10 @@ const detectStackDrift = async (stackNames: string[]): Promise<boolean> => {
 const retrieveStackResources = async (stackNames: string[]): Promise<{[stackName: string]: any}> => {
   const cfnStackResourcesSummaries: {[stackName: string]: any} = {};
   for (const stackName of stackNames) {
-    const listStackResources = sh(`aws cloudformation list-stack-resources --stack-name ${stackName}`);
+    const res = await cfnClient.send(new ListStackResourcesCommand({StackName: stackName}));
     cfnStackResourcesSummaries[stackName] = {};
-    for (const resource of JSON.parse(listStackResources.stdout).StackResourceSummaries) {
-      cfnStackResourcesSummaries[stackName][resource.LogicalResourceId] = resource;
+    for (const resource of res.StackResourceSummaries!) {
+      cfnStackResourcesSummaries[stackName][resource.LogicalResourceId!] = resource;
     }
   }
   return cfnStackResourcesSummaries;
@@ -144,8 +158,7 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
     stackDriftDetected,
     templateDiff,
     cfnStackResourcesSummaries,
-    cfnStacks,
-    awsRegion
+    cfnStacks
   } = option;
 
   let comment = `${messageHeading}\n\n\n`;
@@ -302,7 +315,7 @@ const removeOldComment = async (): Promise<void> => {
   }
 };
 
-const postComment = async (prNumber: string, comment: string): Promise<void> => {
+const postComment = async (comment: string): Promise<void> => {
   const path = `/tmp/comment-${randomUUID()}`;
   fs.writeFileSync(path, comment);
   sh(`gh pr comment  ${prNumber} -F ${path}`);
