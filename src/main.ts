@@ -22,6 +22,8 @@ const cdkCommand = core.getInput('cdk-command');
 const enableDriftDetection = core.getBooleanInput('enable-drift-detection');
 const awsRegion = core.getInput('aws-region');
 const replaceComments = core.getBooleanInput('replace-comments');
+const commentTitle = core.getInput('comment-title');
+
 const cfnClient = new CloudFormationClient({region: awsRegion});
 
 async function run(): Promise<void> {
@@ -147,8 +149,6 @@ interface MakeDiffMessageOption {
   awsRegion: string;
 }
 
-const messageHeading = `## 🌎 Cloudformation Stack Diff`;
-
 const makeDiffMessage = (option: MakeDiffMessageOption): string => {
   const {
     stackNames,
@@ -161,34 +161,31 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
     cfnStacks
   } = option;
 
-  let comment = `${messageHeading}\n\n\n`;
+  let comment = `${commentTitle}\n\n\n`;
   comment += '[View GitHub Action]';
   comment += `(${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID})\n\n`;
 
   comment +=
     '<details>\n' +
-    '<summary>表や絵文字の意味</summary>\n' +
+    '<summary>Legends</summary>\n' +
     '\n' +
-    '> ### 差分の絵文字の意味\n' +
-    '> - 🈚 変更なし\n' +
-    '> - 🆕 新規追加\n' +
-    '> - ✏️ 変更あり\n' +
-    '> - ♻️ 変更あり（置換 : CFnによってリソースが一旦削除され再作成される）\n' +
-    '> - 🗑 削除 (DeletionPolicy が Retain のもの、実際のリソースは削除されない)\n' +
-    '> - 🔥 削除 (DeletionPolicy が Retain 以外、CFn によってリソースが削除される) \n' +
+    '> ### Emojis\n' +
+    '> - 🈚 No Change\n' +
+    '> - 🆕 New Resource\n' +
+    '> - ✏️ Update Resource\n' +
+    '> - ♻️ Replace Reosurce (CFn recreate the resource)\n' +
+    '> - 🗑 Logical Remove\n' +
+    '> - 🔥 Destory Physical Resource\n' +
     '> \n' +
-    '> ### Drift の意味\n' +
-    '> - ︎ ⚠ NOT_CHECKED （未対応等でドリフト検知できない）\n' +
-    '> - 🚨 MODIFIED （実際のリソースと CFn テンプレートに差異がある）\n' +
-    '> - ✅ IN_SYNC（ドリフトがない）\n' +
-    '> - 空欄（未作成のリソースなど）\n' +
-    '> ### タイプ\n' +
-    '> リソースの種類。 `AWS::CDK::Metadata` や `Custom::*` は CDK 上のメタデータで CFn 以外にリソースが作成されることはない。\n' +
-    '> よってそれらのリソースはドリフトが NOT_CHECKED になる\n' +
+    '> ### Drift\n' +
+    '> - ︎ ⚠ NOT_CHECKED （Not compatible resources）\n' +
+    "> - 🚨 MODIFIED （Stack's actual configuration differs, or has drifted）\n" +
+    '> - ✅ IN_SYNC（No drift detected）\n' +
+    '> - Empty（Resources is not yet created）\n' +
     '\n' +
     '</details>\n\n';
 
-  // 差分とドリフトの有無を表にして出力
+  // Print diff and drifts as Markdown table format
   comment += `### Stacks ${editedStackCount >= 0 ? '' : '(No Changes) '} ${
     stackDriftDetected ? '🚨 **Stack Drift Detected** 🚨' : ''
   }\n\n`;
@@ -212,7 +209,7 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
       const driftUrl = `https://${awsRegion}.console.aws.amazon.com/cloudformation/home?region=${awsRegion}#/stacks/drifts?stackId=${encodeURI(
         stackName
       )}`;
-      comment += `#### ${stackNamePrefix} [${stackName}](${stackUrl}) [ドリフト検知](${driftUrl})\n`;
+      comment += `#### ${stackNamePrefix} [${stackName}](${stackUrl}) [Drift Detection](${driftUrl})\n`;
     } else {
       comment += `#### ${stackNamePrefix} ${stackName}\n`;
     }
@@ -244,7 +241,7 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
     comment += '</details>\n\n';
 
     // リソースの表
-    comment += '|差分|Drift|タイプ|論理ID|\n';
+    comment += '|DIff|Drift|Type|Logical ID|\n';
     comment += '|---|---|---|---|\n';
 
     const cfnResources = cfnStackResourcesSummaries[stackName] ?? {};
@@ -258,10 +255,10 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
 
       switch (change?.changeImpact) {
         case ResourceImpact.WILL_UPDATE:
-          diffMsg = '✏️ Update'; // 変更
+          diffMsg = '✏️ Update';
           break;
         case ResourceImpact.WILL_CREATE:
-          diffMsg = '🆕 Create'; // 追加
+          diffMsg = '🆕 Create';
           break;
         case ResourceImpact.WILL_REPLACE:
           diffMsg = '♻️ Replace';
@@ -270,10 +267,10 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
           diffMsg = '♻️ May Replace';
           break;
         case ResourceImpact.WILL_DESTROY:
-          diffMsg = '🔥 Destroy'; // 実際のリソースも削除
+          diffMsg = '🔥 Destroy'; // Destroy actual resource
           break;
         case ResourceImpact.WILL_ORPHAN:
-          diffMsg = '🗑 Remove'; // スタックから削除
+          diffMsg = '🗑 Remove'; // Remove from stack
           break;
         case ResourceImpact.NO_CHANGE:
         default:
@@ -308,7 +305,7 @@ const removeOldComment = async (): Promise<void> => {
   const comments = JSON.parse(gh.stdout);
   const commentsIdToDelete = comments
     .filter((x: any) => x.user.login === 'github-actions[bot]')
-    .filter((x: any) => x.body.includes(messageHeading))
+    .filter((x: any) => x.body.includes(commentTitle))
     .map((x: any) => x.id);
   for (const id of commentsIdToDelete) {
     sh(`gh api --method DELETE "/repos/${process.env.GITHUB_REPOSITORY}/issues/comments/${id}"`);

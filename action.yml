@@ -21,6 +21,11 @@ inputs:
     required: true
     description: 'AWS region'
 
+  comment-title:
+    required: false
+    description: 'Title of bot comment'
+    default: '🌎 Cloudformation Stack Diff'
+
   replace-comments:
     required: false
     default: 'true'
