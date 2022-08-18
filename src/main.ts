@@ -251,7 +251,7 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
     comment += '</details>\n\n';
 
     // リソースの表
-    comment += '|DIff|Drift|Type|Logical ID|\n';
+    comment += '|Diff|Drift|Type|Logical ID|\n';
     comment += '|---|---|---|---|\n';
 
     for (const logicalId of Object.keys(cfnResources)) {
@@ -297,7 +297,8 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
         driftMsg = driftStatus ?? '';
       }
 
-      const type = change?.newResourceType ?? stackTemplates[stackName].Resources[logicalId]?.Type ?? '';
+      const type =
+        change?.newResourceType ?? change?.resourceType ?? stackTemplates[stackName].Resources[logicalId]?.Type ?? '';
 
       comment += `|${diffMsg}|${driftMsg}|${type}|${logicalId}|\n`;
     }
