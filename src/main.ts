@@ -252,8 +252,13 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
     comment += '</details>\n\n';
 
     // リソースの表
-    comment += '|Diff|Drift|Type|Logical ID|\n';
-    comment += '|---|---|---|---|\n';
+    if (enableDriftDetection) {
+      comment += '|Diff|Drift|Type|Logical ID|\n';
+      comment += '|---|---|---|---|\n';
+    } else {
+      comment += '|Diff|Type|Logical ID|\n';
+      comment += '|---|---|---|\n';
+    }
 
     for (const logicalId of Object.keys(cfnResources)) {
       const change = templateDiff[stackName].resources.get(logicalId);
@@ -306,7 +311,11 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
       const type =
         change?.newResourceType ?? change?.resourceType ?? stackTemplates[stackName].Resources[logicalId]?.Type ?? '';
 
-      comment += `|${diffMsg}|${driftMsg}|${type}|${logicalId}|\n`;
+      if (enableDriftDetection) {
+        comment += `|${diffMsg}|${driftMsg}|${type}|${logicalId}|\n`;
+      } else {
+        comment += `|${diffMsg}|${type}|${logicalId}|\n`;
+      }
     }
     comment += '\n\n\n';
   }
