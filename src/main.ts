@@ -223,7 +223,7 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
       const driftUrl = `https://${awsRegion}.console.aws.amazon.com/cloudformation/home?region=${awsRegion}#/stacks/drifts?stackId=${encodeURI(
         stackName
       )}`;
-      comment += `#### ${stackNamePrefix} [${stackName}](${stackUrl}) [Drift Detection](${driftUrl})\n`;
+      comment += `#### ${stackNamePrefix} [${stackName}](${stackUrl}) [(Drift Detection)](${driftUrl})\n`;
     } else {
       comment += `#### ${stackNamePrefix} ${stackName}\n`;
     }
@@ -254,11 +254,10 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
     comment += '|DIff|Drift|Type|Logical ID|\n';
     comment += '|---|---|---|---|\n';
 
-    // Without any changes. templateDiff[stackName].resources.diffs is empty
-    const logicalIds =
-      status === 'not_changed' ? Object.keys(cfnResources) : templateDiff[stackName].resources.logicalIds;
-    for (const logicalId of logicalIds) {
+    for (const logicalId of Object.keys(cfnResources)) {
       const change = templateDiff[stackName].resources.get(logicalId);
+      if (cfnResources[logicalId].ResourceType === 'AWS::CDK::Metadata') continue;
+
       let diffMsg;
       let driftMsg;
 
