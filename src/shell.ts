@@ -36,3 +36,8 @@ export const sleep = async (milliseconds: number): Promise<void> => {
     setTimeout(resolve, milliseconds);
   });
 };
+
+export const removeEscapeCharacters = (s: string): string => {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/[\u001b\u009b][[()#;?]*(?:\d{1,4}(?:;\d{0,4})*)?[\dA-ORZcf-nqry=><]/g, '');
+};

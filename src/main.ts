@@ -1,20 +1,22 @@
 import * as core from '@actions/core';
-import {sh, sleep} from './shell';
+import {removeEscapeCharacters, sh, sleep} from './shell';
 import * as fs from 'fs';
-import {diffTemplate, formatDifferences, ResourceImpact} from '@aws-cdk/cloudformation-diff';
+import {diffTemplate, formatDifferences, ResourceImpact, TemplateDiff} from '@aws-cdk/cloudformation-diff';
 import {PassThrough} from 'stream';
 import {randomUUID} from 'crypto';
 import {
   CloudFormationClient,
   DescribeStackDriftDetectionStatusCommand,
-  ListStackResourcesCommand,
+  DescribeStackDriftDetectionStatusCommandOutput,
   DetectStackDriftCommand,
   GetTemplateCommand,
+  ListStackResourcesCommand,
   ListStacksCommand,
   StackDriftDetectionStatus,
   StackDriftStatus,
-  StackStatus,
-  DescribeStackDriftDetectionStatusCommandOutput
+  StackResourceDriftStatus,
+  StackResourceSummary,
+  StackStatus
 } from '@aws-sdk/client-cloudformation';
 
 const prNumber = core.getInput('pr-number');
@@ -56,7 +58,7 @@ async function run(): Promise<void> {
   }
 
   // Diff templates
-  const templateDiff: {[k: string]: any} = {};
+  const templateDiff: {[k: string]: TemplateDiff} = {};
   let editedStackCount = 0;
   for (const stackName of stackNames) {
     templateDiff[stackName] = diffTemplate(cfnTemplates[stackName] ?? {}, stackTemplates[stackName]);
@@ -70,7 +72,7 @@ async function run(): Promise<void> {
   }
 
   // Retrieve stack resources summaries from CloudFormation (including result of stack drift)
-  const cfnStackResourcesSummaries = retrieveStackResources(cfnStackNames);
+  const cfnStackResourcesSummaries = await retrieveStackResources(cfnStackNames);
 
   const message = makeDiffMessage({
     stackNames,
@@ -125,7 +127,9 @@ const detectStackDrift = async (stackNames: string[]): Promise<boolean> => {
   return stackDriftDetected;
 };
 
-const retrieveStackResources = async (stackNames: string[]): Promise<{[stackName: string]: any}> => {
+const retrieveStackResources = async (
+  stackNames: string[]
+): Promise<{[stackName: string]: {[id: string]: StackResourceSummary}}> => {
   const cfnStackResourcesSummaries: {[stackName: string]: any} = {};
   for (const stackName of stackNames) {
     const res = await cfnClient.send(new ListStackResourcesCommand({StackName: stackName}));
@@ -143,8 +147,8 @@ interface MakeDiffMessageOption {
   cfnStackNames: string[];
   editedStackCount: number;
   stackDriftDetected: boolean;
-  templateDiff: {[s: string]: any};
-  cfnStackResourcesSummaries: {[s: string]: any};
+  templateDiff: {[k: string]: TemplateDiff};
+  cfnStackResourcesSummaries: {[stackName: string]: {[id: string]: StackResourceSummary}};
   cfnStacks: any;
   awsRegion: string;
 }
@@ -196,6 +200,16 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
     } else {
       status = 'new';
     }
+
+    const cfnResources = cfnStackResourcesSummaries[stackName] ?? {};
+    const hasStackDrift =
+      Object.keys(cfnResources).filter(
+        s => cfnResources[s].DriftInformation?.StackResourceDriftStatus === StackResourceDriftStatus.MODIFIED
+      ).length > 0;
+    if (status === 'not_checked' && hasStackDrift) {
+      continue;
+    }
+
     const stackNamePrefix = {
       new: '🆕',
       diff: '✏️',
@@ -214,9 +228,9 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
       comment += `#### ${stackNamePrefix} ${stackName}\n`;
     }
 
-    // cdk diff 結果
+    // cdk diff message
     let formattedDiff;
-    if (templateDiff[stackName].isEnmpty) {
+    if (templateDiff[stackName].isEmpty) {
       formattedDiff = 'There were no differences';
     } else {
       const stream = new PassThrough();
@@ -232,11 +246,7 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
     comment += '<details>\n';
     comment += `<summary>cdk diff</summary>\n\n`;
     comment += '```\n';
-    comment += formattedDiff.replace(
-      // eslint-disable-next-line no-control-regex
-      /[\u001b\u009b][[()#;?]*(?:\d{1,4}(?:;\d{0,4})*)?[\dA-ORZcf-nqry=><]/g,
-      '' // Remove Ansi escapes
-    );
+    comment += removeEscapeCharacters(formattedDiff);
     comment += '\n```\n\n';
     comment += '</details>\n\n';
 
@@ -244,12 +254,11 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
     comment += '|DIff|Drift|Type|Logical ID|\n';
     comment += '|---|---|---|---|\n';
 
-    const cfnResources = cfnStackResourcesSummaries[stackName] ?? {};
-
-    // 差分が全くないと templateDiff[stackName].resources.diffs は空になる
-    const logicalIds = Object.keys(status === 'not_changed' ? cfnResources : templateDiff[stackName].resources.diffs);
+    // Without any changes. templateDiff[stackName].resources.diffs is empty
+    const logicalIds =
+      status === 'not_changed' ? Object.keys(cfnResources) : templateDiff[stackName].resources.logicalIds;
     for (const logicalId of logicalIds) {
-      const change = templateDiff[stackName].resources.diffs[logicalId];
+      const change = templateDiff[stackName].resources.get(logicalId);
       let diffMsg;
       let driftMsg;
 
@@ -289,7 +298,7 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
         driftMsg = driftStatus ?? '';
       }
 
-      const type = change?.resourceTypes?.newType ?? stackTemplates[stackName].Resources[logicalId]?.Type ?? '';
+      const type = change?.newResourceType ?? stackTemplates[stackName].Resources[logicalId]?.Type ?? '';
 
       comment += `|${diffMsg}|${driftMsg}|${type}|${logicalId}|\n`;
     }
