@@ -304,14 +304,14 @@ const makeDiffMessage = (option: MakeDiffMessageOption): string => {
 
 const removeOldComment = async (): Promise<void> => {
   // 過去のコメントを削除する。
-  const gh = sh('gh api "/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments"');
+  const gh = sh(`gh api "/repos/${process.env.GITHUB_REPOSITORY}/issues/${prNumber}/comments"`);
   const comments = JSON.parse(gh.stdout);
   const commentsIdToDelete = comments
     .filter((x: any) => x.user.login === 'github-actions[bot]')
     .filter((x: any) => x.body.includes(messageHeading))
     .map((x: any) => x.id);
   for (const id of commentsIdToDelete) {
-    sh(`gh api --method DELETE "/repos/$GITHUB_REPOSITORY/issues/comments/${id}"`);
+    sh(`gh api --method DELETE "/repos/${process.env.GITHUB_REPOSITORY}/issues/comments/${id}"`);
   }
 };
 

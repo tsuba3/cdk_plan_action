@@ -17,6 +17,13 @@ export const sh = (cmd: string): ShellResult => {
   if (process.stderr.length) core.warning(process.stderr.toString());
   core.endGroup();
 
+  if (process.error) {
+    core.setFailed(process.error);
+  }
+  if (process.status) {
+    core.setFailed('Command exit with not 0 code.');
+  }
+
   return {
     code: process.status ?? 0,
     stderr: process.stderr.toString(),
