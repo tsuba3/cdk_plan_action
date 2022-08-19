@@ -22,6 +22,7 @@ import {
 
 const prNumber = core.getInput('pr-number');
 const cdkCommand = core.getInput('cdk-command');
+const cdkOutDir = core.getInput('cdk-out-dir');
 const enableDriftDetection = core.getBooleanInput('enable-drift-detection');
 const awsRegion = core.getInput('aws-region');
 const replaceComments = core.getBooleanInput('replace-comments');
@@ -34,14 +35,14 @@ async function run(): Promise<void> {
   sh(cdkCommand);
 
   // Read templates json files from files in cdk.out
-  const cdkManifest = JSON.parse(fs.readFileSync('cdk.out/manifest.json').toString('utf-8'));
+  const cdkManifest = JSON.parse(fs.readFileSync(`${cdkOutDir}/manifest.json`).toString('utf-8'));
   const stackNames = Object.entries(cdkManifest.artifacts)
     // @ts-ignore
     .filter(([, v]) => v.type === 'aws:cloudformation:stack')
     .map(([k]) => k);
   const stackTemplates: {[k: string]: any} = {};
   for (const stackName of stackNames) {
-    stackTemplates[stackName] = JSON.parse(fs.readFileSync(`cdk.out/${stackName}.template.json`).toString());
+    stackTemplates[stackName] = JSON.parse(fs.readFileSync(`${cdkOutDir}/${stackName}.template.json`).toString());
   }
 
   // Retrieve current templates from CloudFormation

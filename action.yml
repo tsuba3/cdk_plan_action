@@ -2,10 +2,15 @@ name: CDK Plan Action
 description: Comment cdk diff to pr
 author: tsuba3
 inputs:
-  cdk-command: # change this
+  cdk-command:
     required: false
-    description: 'input description here'
+    description: 'CDK command to write templates to cdk.out'
     default: 'npx cdk synth'
+
+  cdk-out-dir:
+    required: false
+    description: 'Directory of the synthesized cloud assembly'
+    default: 'cdk.out'
 
   enable-drift-detection:
     required: false
