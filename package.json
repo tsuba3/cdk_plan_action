@@ -28,7 +28,7 @@
     "@actions/core": "^1.9.1",
     "@aws-cdk/cloudformation-diff": "^2.37.1",
     "@aws-sdk/client-cloudformation": "^3.150.0",
-    "aws-cdk-lib": "^2.37.1"
+    "aws-cdk-lib": "^2.58.1"
   },
   "devDependencies": {
     "@types/node": "^16.11.49",
